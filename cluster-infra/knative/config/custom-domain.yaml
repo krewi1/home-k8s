@@ -1,0 +1,23 @@
+---
+# Custom domain configuration for Knative Serving
+# Replace 'example.com' with your actual domain
+#
+# Usage:
+#   1. Edit this file and replace example.com with your domain
+#   2. Apply: kubectl apply -f custom-domain.yaml
+#
+# After applying, services will be available at:
+#   <service-name>.<namespace>.<your-domain>
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-domain
+  namespace: knative-serving
+data:
+  # Replace with your domain
+  example.com: ""
+
+  # Or use wildcard DNS for local testing
+  # Format: <ip>.nip.io or <ip>.sslip.io
+  # Example: 192.168.1.100.sslip.io: ""

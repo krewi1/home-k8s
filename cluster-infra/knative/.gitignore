@@ -1,0 +1,8 @@
+# Downloaded manifests
+*.yaml.downloaded
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp

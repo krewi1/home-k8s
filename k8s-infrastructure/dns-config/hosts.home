@@ -1,0 +1,16 @@
+# Static hosts file for Kubernetes cluster
+# Place this at: /etc/hosts.home
+
+# Infrastructure Node (Raspberry Pi 4 - nginx + DNS)
+192.168.0.221   nginx-pi4 pi4
+
+# Kubernetes Master Node (Raspberry Pi 5 with SSD)
+192.168.0.222   master-01 k8s-master
+
+# Kubernetes Worker Nodes (Raspberry Pi 5 + Pi 4)
+192.168.0.223   worker-01 k8s-worker-01
+192.168.0.224   worker-02 k8s-worker-02
+192.168.0.225   worker-03 k8s-worker-03
+
+# Note: All *.home services are handled by wildcard DNS → 192.168.0.221 (nginx)
+# nginx routes to Kourier NodePort, which then routes to the appropriate service

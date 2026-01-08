@@ -1,0 +1,34 @@
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: autoscale-demo
+  namespace: default
+spec:
+  template:
+    metadata:
+      annotations:
+        # Target 100 concurrent requests per pod
+        autoscaling.knative.dev/target: "100"
+        # Scale down to zero after 30 seconds
+        autoscaling.knative.dev/scale-to-zero-pod-retention-period: "30s"
+        # Minimum replicas (0 = scale to zero)
+        autoscaling.knative.dev/min-scale: "0"
+        # Maximum replicas
+        autoscaling.knative.dev/max-scale: "10"
+        # Use Knative Pod Autoscaler (KPA)
+        autoscaling.knative.dev/class: "kpa.autoscaling.knative.dev"
+        # Metrics window for autoscaling decisions
+        autoscaling.knative.dev/metric: "concurrency"
+    spec:
+      containers:
+        - image: gcr.io/knative-samples/autoscale-go:0.0.1
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: "50Mi"
+              cpu: "50m"
+            limits:
+              memory: "100Mi"
+              cpu: "100m"

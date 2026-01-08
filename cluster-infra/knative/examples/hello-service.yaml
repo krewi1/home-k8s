@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: example
+
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: hello
+  namespace: example
+spec:
+  template:
+    metadata:
+      annotations:
+        # Scale to zero after 5 minutes of inactivity
+        autoscaling.knative.dev/scale-to-zero-pod-retention-period: "5m"
+        # Minimum number of replicas
+        autoscaling.knative.dev/min-scale: "0"
+        # Maximum number of replicas
+        autoscaling.knative.dev/max-scale: "5"
+    spec:
+      containers:
+        - image: krewi/hello-world-api
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: TARGET
+              value: "Knative on K3s with Kourier"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"

@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # DNS Server (dnsmasq)
+  dns:
+    image: 4km3/dnsmasq:2.90-r3
+    container_name: homelab-dns
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./dns-config/dnsmasq.conf:/etc/dnsmasq.conf:ro
+      - ./dns-config/home-domain.conf:/etc/dnsmasq.d/home-domain.conf:ro
+      - ./dns-config/hosts.home:/etc/hosts.home:ro
+    cap_add:
+      - NET_ADMIN
+
+  # nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: homelab-nginx
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./nginx-config/kourier-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+      - nginx-cache:/var/cache/nginx
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      - dns
+
+volumes:
+  nginx-cache:
+  nginx-logs:
