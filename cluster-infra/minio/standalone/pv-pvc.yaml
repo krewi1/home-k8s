@@ -1,0 +1,46 @@
+---
+# PersistentVolume for MinIO data (using local SSD)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: minio-pv
+  labels:
+    app: minio
+    type: local
+spec:
+  storageClassName: local-storage
+  capacity:
+    storage: 820Gi  # ~860GB available, leaving some headroom
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  local:
+    path: /mnt/minio-data
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - master-01  # Master node with SSD
+
+---
+# PersistentVolumeClaim for MinIO
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-pvc
+  namespace: minio
+  labels:
+    app: minio
+spec:
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 800Gi
+  selector:
+    matchLabels:
+      app: minio

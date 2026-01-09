@@ -1,0 +1,115 @@
+---
+# MinIO Distributed Mode StatefulSet
+# Requires at least 4 nodes with SSDs
+# This is for future expansion when you add more Raspberry Pi nodes with SSDs
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-headless
+  namespace: minio
+  labels:
+    app: minio
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+  - name: api
+    port: 9000
+    targetPort: 9000
+  selector:
+    app: minio
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio
+  namespace: minio
+  labels:
+    app: minio
+spec:
+  serviceName: minio-headless
+  replicas: 4  # Minimum for distributed mode
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      # Distribute across nodes
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - minio
+            topologyKey: kubernetes.io/hostname
+
+      containers:
+      - name: minio
+        image: minio/minio:latest
+        args:
+        - server
+        - http://minio-{0...3}.minio-headless.minio.svc.cluster.local/data
+        - --console-address
+        - ":9001"
+
+        env:
+        - name: MINIO_ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              name: minio-secret
+              key: rootUser
+        - name: MINIO_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: minio-secret
+              key: rootPassword
+
+        ports:
+        - name: api
+          containerPort: 9000
+        - name: console
+          containerPort: 9001
+
+        volumeMounts:
+        - name: data
+          mountPath: /data
+
+        livenessProbe:
+          httpGet:
+            path: /minio/health/live
+            port: 9000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+
+        readinessProbe:
+          httpGet:
+            path: /minio/health/ready
+            port: 9000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: local-storage
+      resources:
+        requests:
+          storage: 800Gi

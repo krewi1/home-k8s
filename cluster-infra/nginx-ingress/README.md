@@ -9,9 +9,10 @@ nginx-ingress controller for standard Kubernetes Ingress resources. Works alongs
 
 ## Port Configuration
 
-- **HTTP**: NodePort 38080 (accessible on all nodes)
-- **HTTPS**: NodePort 38443 (accessible on all nodes)
+- **HTTP**: NodePort 32080 (accessible on all nodes)
+- **HTTPS**: NodePort 32443 (accessible on all nodes)
 - **Kourier**: Separate port for Knative services (typically 30080)
+- **External Traffic Policy**: Cluster (allows traffic to any node)
 
 ## Installation
 
@@ -22,8 +23,26 @@ nginx-ingress controller for standard Kubernetes Ingress resources. Works alongs
 This will:
 1. Install nginx-ingress controller v1.10.0
 2. Configure as NodePort service
-3. Expose HTTP on port 38080
-4. Expose HTTPS on port 38443
+3. Expose HTTP on port 32080
+4. Expose HTTPS on port 32443
+5. Set externalTrafficPolicy to Cluster for load balancer compatibility
+
+## Performance Optimization
+
+For better performance on Raspberry Pi:
+
+```bash
+./optimize.sh
+```
+
+This applies optimizations for:
+- Worker processes tuned for ARM
+- Increased connection limits
+- Better buffering for large files (MinIO)
+- Reduced logging overhead
+- Multiple replicas for load distribution
+
+**See [PERFORMANCE.md](PERFORMANCE.md) for detailed tuning guide.**
 
 ## Usage
 
@@ -100,13 +119,13 @@ kubectl apply -f my-app.yaml
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 
 # Test with curl
-curl -H "Host: hello.local" http://$NODE_IP:38080/
+curl -H "Host: hello.local" http://$NODE_IP:32080/
 
 # Or add to /etc/hosts
 echo "$NODE_IP hello.local" | sudo tee -a /etc/hosts
 
 # Then access directly
-curl http://hello.local:38080/
+curl http://hello.local:32080/
 ```
 
 ## Features
@@ -238,7 +257,7 @@ kubectl describe ingress <ingress-name>
 
 ### Port conflicts
 
-If port 38080 conflicts with another service:
+If port 32080 conflicts with another service:
 
 ```bash
 # Edit install.sh and change HTTP_NODEPORT
@@ -246,7 +265,7 @@ If port 38080 conflicts with another service:
 kubectl patch service ingress-nginx-controller \
   --namespace ingress-nginx \
   --type merge \
-  --patch '{"spec":{"ports":[{"name":"http","nodePort":38081}]}}'
+  --patch '{"spec":{"ports":[{"name":"http","nodePort":32081}]}}'
 ```
 
 ## Comparison: nginx-ingress vs Kourier
@@ -255,7 +274,7 @@ kubectl patch service ingress-nginx-controller \
 |---------|---------------|---------|
 | **Use Case** | Standard apps | Serverless/Knative |
 | **Resource** | Ingress | Knative Service |
-| **Port** | 38080/38443 | Auto-assigned |
+| **Port** | 32080/32443 | Auto-assigned |
 | **Auto-scaling** | Manual | Automatic |
 | **Scale to Zero** | No | Yes |
 | **Traffic Splitting** | Via annotations | Native |
@@ -297,8 +316,38 @@ See `examples/` directory for:
 - [Ingress API Reference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#ingress-v1-networking-k8s-io)
 - [nginx-ingress Annotations](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/)
 
+## External Traffic Policy
+
+The nginx-ingress service is configured with `externalTrafficPolicy: Cluster`:
+
+### Why Cluster Policy?
+
+- **Cluster** (default in this setup):
+  - ✅ Any node can receive and forward traffic
+  - ✅ Works with external load balancers distributing to all nodes
+  - ✅ No dropped connections
+  - ⚠️ Source IP is NAT'd (shows as cluster IP)
+
+- **Local** (upstream default):
+  - ✅ Preserves source IP address
+  - ❌ Only nodes with nginx-ingress pods can handle traffic
+  - ❌ External load balancers sending to all nodes cause failures/retries
+  - ❌ Poor performance with multi-node load balancing
+
+**For setups with external load balancers (like nginx on HAProxy upstream), Cluster policy is required.**
+
+To change the policy back to Local (if you don't use external LB):
+
+```bash
+kubectl patch service ingress-nginx-controller \
+  --namespace ingress-nginx \
+  --type merge \
+  --patch '{"spec":{"externalTrafficPolicy":"Local"}}'
+```
+
 ## Version Information
 
 - **nginx-ingress Version**: v1.10.0
-- **HTTP NodePort**: 38080
-- **HTTPS NodePort**: 38443
+- **HTTP NodePort**: 32080
+- **HTTPS NodePort**: 32443
+- **External Traffic Policy**: Cluster

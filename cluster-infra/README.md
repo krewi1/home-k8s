@@ -4,13 +4,36 @@ This directory contains infrastructure components and configurations for the hom
 
 ## Components
 
+### MinIO Object Storage
+
+S3-compatible object storage for application data and backups.
+
+- **Directory**: `minio/`
+- **Purpose**: Object storage for applications, backups, and data lakes
+- **Storage**: ~800GB SSD on master node (expandable to distributed mode)
+- **Access**: `minio.home` (console), `minio-api.home` (API)
+- **Documentation**: See [minio/README.md](minio/README.md)
+- **Quick Install**: `cd minio && ./install.sh`
+
+### nginx-ingress Controller
+
+Standard Kubernetes ingress controller for traditional deployments.
+
+- **Directory**: `nginx-ingress/`
+- **Purpose**: HTTP ingress for standard Kubernetes services
+- **Base Domain**: `*.home` (excluding `*.kn.home`)
+- **Ports**: NodePort 38080 (HTTP), 38443 (HTTPS)
+- **Documentation**: See [nginx-ingress/README.md](nginx-ingress/README.md)
+- **Quick Install**: `cd nginx-ingress && ./install.sh`
+
 ### Knative Serving
 
 Serverless platform with Kourier ingress controller for deploying and managing containerized applications.
 
 - **Directory**: `knative/`
 - **Purpose**: Serverless application deployment, auto-scaling, traffic management
-- **Base Domain**: `kn.home`
+- **Base Domain**: `*.kn.home`
+- **Ports**: NodePort 30080 (HTTP)
 - **Documentation**: See [knative/README.md](knative/README.md)
 - **Quick Install**: `cd knative && ./install.sh`
 
@@ -18,7 +41,19 @@ Serverless platform with Kourier ingress controller for deploying and managing c
 
 For a fresh cluster, install components in this order:
 
-1. **Knative Serving** - Serverless platform with Kourier ingress
+1. **MinIO** - Object storage (uses SSD on master node)
+   ```bash
+   cd minio
+   ./install.sh
+   ```
+
+2. **nginx-ingress** - Standard Kubernetes ingress controller
+   ```bash
+   cd nginx-ingress
+   ./install.sh
+   ```
+
+3. **Knative Serving** - Serverless platform with Kourier ingress
    ```bash
    cd knative
    ./install.sh
@@ -29,12 +64,36 @@ For a fresh cluster, install components in this order:
 ```
 cluster-infra/
 ├── README.md                    # This file
+├── minio/                       # MinIO object storage
+│   ├── README.md                # Documentation
+│   ├── install.sh               # Installation script
+│   ├── uninstall.sh             # Uninstallation script
+│   ├── standalone/              # Standalone mode manifests (current)
+│   │   ├── namespace.yaml
+│   │   ├── secret.yaml
+│   │   ├── pv-pvc.yaml
+│   │   ├── deployment.yaml
+│   │   ├── service.yaml
+│   │   └── ingress.yaml
+│   ├── distributed/             # Distributed mode manifests (future)
+│   │   └── statefulset.yaml
+│   └── docs/
+│       └── expansion-guide.md   # Migration to distributed mode
+├── nginx-ingress/               # nginx-ingress controller
+│   ├── README.md                # Documentation
+│   ├── install.sh               # Installation script
+│   ├── uninstall.sh             # Uninstallation script
+│   └── examples/                # Example ingress resources
+│       ├── simple-ingress.yaml
+│       └── multi-service.yaml
 └── knative/                     # Knative Serving with Kourier
     ├── README.md                # Detailed documentation
     ├── install.sh               # Installation script
     ├── uninstall.sh             # Uninstallation script
     ├── config/                  # Configuration files
     │   └── custom-domain.yaml   # Domain configuration (kn.home)
+    ├── docs/
+    │   └── nodeport-configuration.md
     └── examples/                # Example applications
         ├── hello-service.yaml   # Simple hello world service
         └── autoscaling-service.yaml  # Autoscaling demo
@@ -43,11 +102,27 @@ cluster-infra/
 ## Cluster Information
 
 - **Platform**: K3s on Raspberry Pi
-- **Master Node**: Raspberry Pi 5 (with SSD for etcd)
-- **Worker Nodes**: Raspberry Pi 4/5
-- **Serverless**: Knative Serving with Kourier ingress
-- **Domain**: `*.kn.home` for Knative services
-- **Load Balancing**: NodePort (via Kourier gateway)
+- **Master Node**: Raspberry Pi 5 (with 1TB SSD)
+  - 40GB: etcd storage
+  - 100GB: PersistentVolumeClaims
+  - ~800GB: MinIO object storage
+- **Worker Nodes**: Raspberry Pi 4/5 (expandable with SSDs)
+- **Ingress Controllers**:
+  - **Kourier** (port 30080): Knative services on `*.kn.home`
+  - **nginx-ingress** (port 38080): Standard services on `*.home`
+- **Object Storage**: MinIO (standalone, expandable to distributed)
+- **Load Balancing**: NodePort services across all cluster nodes
+
+## Domain Configuration
+
+Traffic routing is handled by nginx reverse proxy (on separate Pi 4 at 192.168.0.221):
+
+- `*.kn.home` → Kourier → Knative Services (serverless)
+- `*.home` → nginx-ingress → Standard Kubernetes Services
+- `minio.home` → nginx-ingress → MinIO Console
+- `minio-api.home` → nginx-ingress → MinIO API
+
+See `../k8s-infrastructure/nginx-config/` for reverse proxy configuration.
 - **Storage**: Local path provisioner (K3s default)
 
 ## Common Tasks

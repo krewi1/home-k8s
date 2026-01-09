@@ -26,8 +26,8 @@ NC='\033[0m'
 # Configuration
 NGINX_VERSION="${NGINX_VERSION:-v1.10.0}"
 NGINX_MANIFEST_URL="https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-${NGINX_VERSION}/deploy/static/provider/cloud/deploy.yaml"
-HTTP_NODEPORT=38080
-HTTPS_NODEPORT=38443
+HTTP_NODEPORT=32080
+HTTPS_NODEPORT=32443
 
 #####################################################################
 # Helper Functions
@@ -108,13 +108,14 @@ configure_nodeport() {
 
     print_info "Setting HTTP port to ${HTTP_NODEPORT} and HTTPS port to ${HTTPS_NODEPORT}"
 
-    # Patch the service to use specific NodePorts
+    # Patch the service to use specific NodePorts and set externalTrafficPolicy
     kubectl patch service ingress-nginx-controller \
         --namespace ingress-nginx \
         --type merge \
         --patch "{
             \"spec\": {
                 \"type\": \"NodePort\",
+                \"externalTrafficPolicy\": \"Cluster\",
                 \"ports\": [
                     {
                         \"name\": \"http\",
