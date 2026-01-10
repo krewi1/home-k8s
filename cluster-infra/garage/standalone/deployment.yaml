@@ -2,72 +2,62 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: minio
-  namespace: minio
+  name: garage
+  namespace: garage
   labels:
-    app: minio
+    app: garage
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: minio
+      app: garage
   strategy:
     type: Recreate  # Important for stateful apps with RWO volumes
   template:
     metadata:
       labels:
-        app: minio
+        app: garage
     spec:
       # Run on master node (where the SSD is mounted)
       nodeSelector:
         kubernetes.io/hostname: master-01
 
       containers:
-      - name: minio
-        image: minio/minio:RELEASE.2025-02-28T09-55-16Z
-        args:
-        - server
-        - /data
-        - --console-address
-        - ":9001"
-
-        env:
-        - name: MINIO_ROOT_USER
-          valueFrom:
-            secretKeyRef:
-              name: minio-secret
-              key: rootUser
-        - name: MINIO_ROOT_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: minio-secret
-              key: rootPassword
+      - name: garage
+        image: dxflrs/garage:v1.0.0
 
         ports:
-        - name: api
-          containerPort: 9000
+        - name: s3-api
+          containerPort: 3900
           protocol: TCP
-        - name: console
-          containerPort: 9001
+        - name: rpc
+          containerPort: 3901
+          protocol: TCP
+        - name: web
+          containerPort: 3902
+          protocol: TCP
+        - name: admin
+          containerPort: 3903
           protocol: TCP
 
         volumeMounts:
         - name: data
           mountPath: /data
+        - name: config
+          mountPath: /etc/garage.toml
+          subPath: garage.toml
 
         livenessProbe:
-          httpGet:
-            path: /minio/health/live
-            port: 9000
+          tcpSocket:
+            port: 3900
           initialDelaySeconds: 30
           periodSeconds: 30
           timeoutSeconds: 10
           failureThreshold: 3
 
         readinessProbe:
-          httpGet:
-            path: /minio/health/ready
-            port: 9000
+          tcpSocket:
+            port: 3900
           initialDelaySeconds: 10
           periodSeconds: 10
           timeoutSeconds: 5
@@ -84,4 +74,7 @@ spec:
       volumes:
       - name: data
         persistentVolumeClaim:
-          claimName: minio-pvc
+          claimName: garage-pvc
+      - name: config
+        secret:
+          secretName: garage-config

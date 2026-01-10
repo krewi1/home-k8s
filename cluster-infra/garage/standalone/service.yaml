@@ -1,0 +1,26 @@
+---
+# Garage S3 API Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: garage
+  namespace: garage
+  labels:
+    app: garage
+spec:
+  type: ClusterIP
+  ports:
+  - name: s3-api
+    port: 3900
+    targetPort: 3900
+    protocol: TCP
+  - name: web
+    port: 3902
+    targetPort: 3902
+    protocol: TCP
+  - name: admin
+    port: 3903
+    targetPort: 3903
+    protocol: TCP
+  selector:
+    app: garage

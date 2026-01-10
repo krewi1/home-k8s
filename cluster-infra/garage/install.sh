@@ -1,14 +1,14 @@
 #!/bin/bash
 
 #####################################################################
-# MinIO Installation Script (Standalone Mode)
+# Garage Installation Script (Standalone Mode)
 #
-# Installs MinIO in standalone mode using the SSD on master node
+# Installs Garage in standalone mode using the SSD on master node
 # Can be migrated to distributed mode later when more nodes are added
 #
 # Prerequisites:
 #   - K3s cluster running
-#   - SSD formatted and mounted at /mnt/minio-data on master node
+#   - SSD formatted and mounted at /mnt/garage-data on master node
 #   - kubectl configured
 #####################################################################
 
@@ -23,8 +23,8 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 # Configuration
-MINIO_VERSION="standalone"
-NAMESPACE="minio"
+GARAGE_VERSION="standalone"
+NAMESPACE="garage"
 
 #####################################################################
 # Helper Functions
@@ -71,7 +71,7 @@ check_ssd_mount() {
 
     local master_node=$(kubectl get nodes -l node-role.kubernetes.io/control-plane -o jsonpath='{.items[0].metadata.name}')
 
-    print_info "Checking /mnt/minio-data on $master_node..."
+    print_info "Checking /mnt/garage-data on $master_node..."
 
     if ! kubectl get node "$master_node" &> /dev/null; then
         print_error "Master node not found"
@@ -79,9 +79,9 @@ check_ssd_mount() {
     fi
 
     print_success "Master node found: $master_node"
-    print_warning "Ensure /mnt/minio-data is mounted on $master_node before continuing"
+    print_warning "Ensure /mnt/garage-data is mounted on $master_node before continuing"
 
-    read -p "Is /mnt/minio-data mounted and ready? (y/N): " confirm
+    read -p "Is /mnt/garage-data mounted and ready? (y/N): " confirm
     if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
         print_info "Installation cancelled. Please mount the SSD first."
         exit 0
@@ -102,32 +102,28 @@ check_existing_installation() {
 }
 
 update_credentials() {
-    print_step "Security Warning: Default Credentials"
+    print_step "Security Warning: Default RPC Secret"
 
-    print_warning "The default credentials are:"
-    echo "  Username: admin"
-    echo "  Password: changeme123"
+    print_warning "The default RPC secret is set in standalone/secret.yaml"
     echo ""
-    print_warning "You should change these after installation!"
+    print_warning "You should change this after installation!"
     echo ""
 
-    read -p "Do you want to set custom credentials now? (y/N): " set_custom
+    read -p "Do you want to set a custom RPC secret now? (y/N): " set_custom
 
     if [[ "$set_custom" == "y" || "$set_custom" == "Y" ]]; then
-        read -p "Enter MinIO root username: " minio_user
-        read -sp "Enter MinIO root password: " minio_pass
-        echo ""
+        # Generate random secret
+        local rpc_secret=$(openssl rand -base64 32)
 
         # Update secret file
-        sed -i.bak "s/rootUser: \"admin\"/rootUser: \"$minio_user\"/" standalone/secret.yaml
-        sed -i.bak "s/rootPassword: \"changeme123\"/rootPassword: \"$minio_pass\"/" standalone/secret.yaml
+        sed -i.bak "s/rpc_secret = \"changeMe123!\"/rpc_secret = \"$rpc_secret\"/" standalone/secret.yaml
 
-        print_success "Credentials updated in manifest"
+        print_success "RPC secret updated in manifest"
     fi
 }
 
-install_minio() {
-    print_step "Installing MinIO (Standalone Mode)..."
+install_garage() {
+    print_step "Installing Garage (Standalone Mode)..."
 
     print_info "Applying manifests..."
     kubectl apply -f standalone/namespace.yaml
@@ -137,38 +133,38 @@ install_minio() {
     kubectl apply -f standalone/service.yaml
     kubectl apply -f standalone/ingress.yaml
 
-    print_success "MinIO manifests applied"
+    print_success "Garage manifests applied"
 }
 
-wait_for_minio() {
-    print_step "Waiting for MinIO to be ready..."
+wait_for_garage() {
+    print_step "Waiting for Garage to be ready..."
 
     print_info "Waiting for deployment..."
     kubectl wait --namespace "$NAMESPACE" \
         --for=condition=ready pod \
-        --selector=app=minio \
+        --selector=app=garage \
         --timeout=300s
 
-    print_success "MinIO is ready"
+    print_success "Garage is ready"
 }
 
 verify_installation() {
     print_step "Verifying installation..."
 
     echo ""
-    echo "MinIO Deployment:"
+    echo "Garage Deployment:"
     kubectl get deployment -n "$NAMESPACE"
     echo ""
-    echo "MinIO Pods:"
+    echo "Garage Pods:"
     kubectl get pods -n "$NAMESPACE"
     echo ""
-    echo "MinIO Services:"
+    echo "Garage Services:"
     kubectl get svc -n "$NAMESPACE"
     echo ""
-    echo "MinIO Ingress:"
+    echo "Garage Ingress:"
     kubectl get ingress -n "$NAMESPACE"
     echo ""
-    echo "MinIO PVC:"
+    echo "Garage PVC:"
     kubectl get pvc -n "$NAMESPACE"
 
     print_success "Installation verification complete"
@@ -181,33 +177,45 @@ display_installation_info() {
 
     echo ""
     echo "=========================================="
-    print_success "MinIO Installation Complete!"
+    print_success "Garage Installation Complete!"
     echo "=========================================="
     echo ""
     echo "Access Information:"
     echo ""
-    echo "  Web Console: http://minio.home"
-    echo "  API Endpoint: http://minio-api.home"
+    echo "  S3 API: http://garage-api.home"
+    echo "  Web UI: http://garage.home"
     echo ""
     echo "  Or via IP:"
-    echo "  Web Console: http://$node_ip:38080 (with Host: minio.home)"
-    echo "  API: http://$node_ip:38080 (with Host: minio-api.home)"
+    echo "  S3 API: http://$node_ip:38080 (with Host: garage-api.home)"
+    echo "  Web UI: http://$node_ip:38080 (with Host: garage.home)"
     echo ""
-    echo "Credentials:"
-    echo "  Check standalone/secret.yaml for username/password"
+    echo "  Internal cluster service:"
+    echo "  S3 API: garage.garage.svc.cluster.local:3900"
+    echo ""
+    echo "Configuration:"
+    echo "  Config file: /etc/garage.toml (in secret garage-config)"
+    echo "  RPC Secret: Change 'rpc_secret' in standalone/secret.yaml"
     echo ""
     echo "Storage:"
-    echo "  Location: /mnt/minio-data (on master node)"
+    echo "  Location: /mnt/garage-data (on master node)"
     echo "  Size: ~800GB"
     echo ""
     echo "Next Steps:"
-    echo "  1. Access web console at http://minio.home"
-    echo "  2. Login with credentials"
-    echo "  3. Create buckets for your applications"
-    echo "  4. Configure applications to use MinIO"
+    echo "  1. Get the node ID:"
+    echo "     kubectl exec -n garage deployment/garage -- garage status"
     echo ""
-    echo "Future Expansion:"
-    echo "  See docs/expansion-guide.md for migrating to distributed mode"
+    echo "  2. Create a garage layout:"
+    echo "     kubectl exec -n garage deployment/garage -- garage layout assign -z dc1 -c 1 <node-id>"
+    echo "     kubectl exec -n garage deployment/garage -- garage layout apply --version 1"
+    echo ""
+    echo "  3. Create keys and buckets:"
+    echo "     kubectl exec -n garage deployment/garage -- garage key create my-key"
+    echo "     kubectl exec -n garage deployment/garage -- garage bucket create my-bucket"
+    echo "     kubectl exec -n garage deployment/garage -- garage bucket allow --read --write my-bucket --key my-key"
+    echo ""
+    echo "  4. Configure applications to use Garage S3 API"
+    echo "     Endpoint: http://garage.garage.svc.cluster.local:3900"
+    echo "     Region: garage"
     echo ""
     echo "=========================================="
 }
@@ -219,11 +227,11 @@ display_installation_info() {
 main() {
     clear
     echo "=========================================="
-    echo "  MinIO Installation (Standalone)"
+    echo "  Garage Installation (Standalone)"
     echo "=========================================="
     echo ""
     echo "Mode: Standalone (Single Node)"
-    echo "Storage: /mnt/minio-data on master node"
+    echo "Storage: /mnt/garage-data on master node"
     echo ""
 
     # Check prerequisites
@@ -238,11 +246,11 @@ main() {
     # Update credentials
     update_credentials
 
-    # Install MinIO
-    install_minio
+    # Install Garage
+    install_garage
 
-    # Wait for MinIO to be ready
-    wait_for_minio
+    # Wait for Garage to be ready
+    wait_for_garage
 
     # Verify installation
     verify_installation

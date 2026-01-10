@@ -1,11 +1,11 @@
 ---
-# PersistentVolume for MinIO data (using local SSD)
+# PersistentVolume for Garage data (using local SSD)
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: minio-pv
+  name: garage-pv
   labels:
-    app: minio
+    app: garage
     type: local
 spec:
   storageClassName: local-storage
@@ -15,7 +15,7 @@ spec:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
   local:
-    path: /mnt/minio-data
+    path: /mnt/garage-data
   nodeAffinity:
     required:
       nodeSelectorTerms:
@@ -26,14 +26,14 @@ spec:
           - master-01  # Master node with SSD
 
 ---
-# PersistentVolumeClaim for MinIO
+# PersistentVolumeClaim for Garage
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: minio-pvc
-  namespace: minio
+  name: garage-pvc
+  namespace: garage
   labels:
-    app: minio
+    app: garage
 spec:
   storageClassName: local-storage
   accessModes:
@@ -43,4 +43,4 @@ spec:
       storage: 800Gi
   selector:
     matchLabels:
-      app: minio
+      app: garage

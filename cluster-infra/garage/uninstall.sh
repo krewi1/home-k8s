@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #####################################################################
-# MinIO Uninstallation Script
+# Garage Uninstallation Script
 #####################################################################
 
 set -e
@@ -26,12 +26,13 @@ print_warning() {
 }
 
 echo "=========================================="
-echo "  MinIO Uninstallation"
+echo "  Garage Uninstallation"
 echo "=========================================="
 echo ""
 
-print_warning "This will remove MinIO from your cluster"
-print_warning "Data on /mnt/minio-data will NOT be deleted"
+print_warning "This will remove Garage from your cluster"
+print_warning "Data on /mnt/garage-data will NOT be deleted"
+echo ""
 read -p "Are you sure you want to continue? (y/N): " confirm
 
 if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
@@ -39,10 +40,10 @@ if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
     exit 0
 fi
 
-print_info "Uninstalling MinIO..."
+print_info "Uninstalling Garage..."
 
 # Try standalone mode first
-if kubectl get namespace minio &> /dev/null; then
+if kubectl get namespace garage &> /dev/null; then
     kubectl delete -f standalone/ingress.yaml --ignore-not-found=true
     kubectl delete -f standalone/service.yaml --ignore-not-found=true
     kubectl delete -f standalone/deployment.yaml --ignore-not-found=true
@@ -54,5 +55,9 @@ fi
 # Try distributed mode
 kubectl delete -f distributed/ --ignore-not-found=true 2>/dev/null || true
 
-print_success "MinIO has been uninstalled"
-print_info "Data still exists at /mnt/minio-data on the master node"
+print_success "Garage has been uninstalled"
+echo ""
+print_info "Data preserved at /mnt/garage-data on the master node"
+print_info "To completely remove:"
+echo "  sudo rm -rf /mnt/garage-data"
+echo ""
