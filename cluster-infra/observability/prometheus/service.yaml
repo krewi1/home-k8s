@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: observability
+  labels:
+    app: prometheus
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP
+    name: web
+  - port: 10901
+    targetPort: 10901
+    protocol: TCP
+    name: grpc
+  - port: 10902
+    targetPort: 10902
+    protocol: TCP
+    name: thanos-http
+  selector:
+    app: prometheus

@@ -1,0 +1,46 @@
+---
+# PersistentVolume for Prometheus data (using SSD PVC partition)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: prometheus-data-pv
+  labels:
+    app: prometheus
+    type: local
+spec:
+  storageClassName: local-storage
+  capacity:
+    storage: 20Gi  # Reduced - only 7 days local, rest in MinIO via Thanos
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  local:
+    path: /mnt/k8s-pvc/prometheus
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - master-01  # Master node with SSD
+
+---
+# PersistentVolumeClaim for Prometheus
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data-pvc
+  namespace: observability
+  labels:
+    app: prometheus
+spec:
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi  # Reduced - only 7 days local, rest in MinIO via Thanos
+  selector:
+    matchLabels:
+      app: prometheus

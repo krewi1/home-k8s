@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thanos-store-gateway
+  namespace: observability
+  labels:
+    app: thanos-store-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: thanos-store-gateway
+  template:
+    metadata:
+      labels:
+        app: thanos-store-gateway
+    spec:
+      containers:
+      - name: thanos-store-gateway
+        image: quay.io/thanos/thanos:v0.36.1
+        args:
+          - store
+          - --data-dir=/var/thanos/store
+          - --objstore.config-file=/etc/thanos/objstore.yml
+          - --http-address=0.0.0.0:10902
+          - --grpc-address=0.0.0.0:10901
+        ports:
+        - name: http
+          containerPort: 10902
+        - name: grpc
+          containerPort: 10901
+        volumeMounts:
+        - name: thanos-objstore-config
+          mountPath: /etc/thanos
+        - name: data
+          mountPath: /var/thanos/store
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+      volumes:
+      - name: thanos-objstore-config
+        secret:
+          secretName: thanos-objstore-config
+      - name: data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: thanos-store-gateway
+  namespace: observability
+  labels:
+    app: thanos-store-gateway
+spec:
+  type: ClusterIP
+  ports:
+  - port: 10901
+    targetPort: 10901
+    protocol: TCP
+    name: grpc
+  - port: 10902
+    targetPort: 10902
+    protocol: TCP
+    name: http
+  selector:
+    app: thanos-store-gateway
