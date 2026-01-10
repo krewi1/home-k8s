@@ -1,13 +1,13 @@
 # Observability Stack
 
-Monitoring and metrics collection for the Kubernetes cluster using **Prometheus + Thanos** with long-term storage in MinIO.
+Monitoring and metrics collection for the Kubernetes cluster using **Prometheus + Thanos** with long-term storage in Garage.
 
 ## Current Setup
 
 **Components:** Prometheus + Thanos (Sidecar, Query, Store Gateway, Compactor)
 **Namespace:** observability
 **Short-term Storage:** `/mnt/k8s-pvc/prometheus` (20Gi SSD - 7 days)
-**Long-term Storage:** MinIO bucket `thanos` (unlimited - 1 year+)
+**Long-term Storage:** Garage bucket `thanos` (unlimited - 1 year+)
 **Access:** Grafana for visualization, port-forward for debugging
 
 ## Architecture
@@ -25,9 +25,9 @@ Kubernetes Resources
     (stores 7 days locally on SSD)
          ↓
     Thanos Sidecar
-    (uploads 2h blocks to MinIO)
+    (uploads 2h blocks to Garage)
          ↓
-    MinIO (thanos bucket)
+    Garage (thanos bucket)
     (long-term storage)
          ↓
     Thanos Compactor
@@ -39,7 +39,7 @@ Query Flow:
          ↓
     Thanos Query
          ├─ Prometheus (recent 7 days) → fast SSD access
-         └─ Thanos Store Gateway (older data) → reads from MinIO
+         └─ Thanos Store Gateway (older data) → reads from Garage
               ↓
          Unified Results
 ```
@@ -47,7 +47,7 @@ Query Flow:
 ## Why Thanos?
 
 **Problem:** Raspberry Pi nodes only have SD card storage (limited)
-**Solution:** Keep recent metrics on master node's SSD, store everything else in MinIO
+**Solution:** Keep recent metrics on master node's SSD, store everything else in Garage
 
 **Benefits:**
 - Query years of metrics without filling up SSD
@@ -63,7 +63,7 @@ Query Flow:
 1. **Kubernetes cluster** running (K3s)
 2. **kubectl** configured
 3. **nginx-ingress** controller installed
-4. **MinIO** installed and running
+4. **Garage** installed and running
 5. **Master node** with `/mnt/k8s-pvc` mounted (100GB SSD partition)
 
 ### Deploy Prometheus + Thanos
@@ -87,8 +87,8 @@ cd ../thanos
 ```
 
 The installation will:
-1. Check MinIO availability
-2. Create `thanos` bucket in MinIO
+1. Check Garage availability
+2. Create `thanos` bucket in Garage
 3. Create observability namespace
 4. Deploy Prometheus with Thanos sidecar
 5. Deploy Thanos components (Query, Store Gateway, Compactor)
@@ -124,9 +124,9 @@ kubectl port-forward -n observability svc/prometheus 9091:9090
 
 Current configuration:
 - **Prometheus local**: 7 days on SSD (20Gi)
-- **MinIO raw data**: 30 days
-- **MinIO 5m downsampled**: 90 days
-- **MinIO 1h downsampled**: 365 days
+- **Garage raw data**: 30 days
+- **Garage 5m downsampled**: 90 days
+- **Garage 1h downsampled**: 365 days
 
 To change retention, edit `thanos/compactor.yaml`:
 
@@ -137,16 +137,16 @@ args:
   - --retention.resolution-1h=365d      # 1-hour downsampled
 ```
 
-### MinIO Credentials
+### Garage Credentials
 
-Update `thanos/minio-secret.yaml` with your MinIO credentials:
+Update `prometheus/garage-secret.yaml` with your Garage credentials:
 
 ```yaml
 config:
   bucket: thanos
-  endpoint: minio.minio.svc.cluster.local:9000
-  access_key: admin           # Change this
-  secret_key: changeme123     # Change this
+  endpoint: garage.garage.svc.cluster.local:3900
+  access_key: <your-garage-access-key>     # Change this
+  secret_key: <your-garage-secret-key>     # Change this
 ```
 
 ### Scrape Configuration
@@ -216,16 +216,16 @@ Thanos automatically selects the best resolution based on query time range:
 # Last 2 hours (uses raw data from Prometheus)
 container_memory_usage_bytes{namespace="default"}[2h]
 
-# Last 7 days (uses raw data from Prometheus/MinIO)
+# Last 7 days (uses raw data from Prometheus/Garage)
 container_memory_usage_bytes{namespace="default"}[7d]
 
-# Last 30 days (uses raw data from MinIO)
+# Last 30 days (uses raw data from Garage)
 container_memory_usage_bytes{namespace="default"}[30d]
 
-# Last 90 days (uses 5m downsampled data from MinIO)
+# Last 90 days (uses 5m downsampled data from Garage)
 container_memory_usage_bytes{namespace="default"}[90d]
 
-# Last 365 days (uses 1h downsampled data from MinIO)
+# Last 365 days (uses 1h downsampled data from Garage)
 container_memory_usage_bytes{namespace="default"}[365d]
 ```
 
@@ -326,38 +326,34 @@ kubectl logs -n observability -f deployment/thanos-compactor
 
 Port-forward to Thanos Query and visit `http://localhost:9090/stores` to see all connected data sources:
 - Sidecar (recent data from Prometheus)
-- Store Gateway (historical data from MinIO)
+- Store Gateway (historical data from Garage)
 
-### Verify Data in MinIO
+### Verify Data in Garage
 
 ```bash
-# Port forward to MinIO console
-kubectl port-forward -n minio svc/minio-console 9001:9001
+# Check Garage bucket
+garage bucket info thanos
 
-# Access http://localhost:9001
-# Navigate to buckets → thanos → check for data blocks
+# List objects in bucket
+garage bucket list thanos
 ```
 
 ## Backup & Restore
 
 ### Backup Strategy
 
-**1. MinIO Data (Most Important)**
-- All historical metrics are in MinIO bucket `thanos`
-- Use MinIO replication or `mc mirror` to backup
+**1. Garage Data (Most Important)**
+- All historical metrics are in Garage bucket `thanos`
+- Use Garage replication or backup mechanisms
 
 ```bash
-# Backup MinIO bucket
-kubectl run -n minio mc-backup --image=minio/mc --rm -i --command -- sh -c "
-  mc alias set source http://minio.minio:9000 admin changeme123
-  mc alias set backup s3.amazonaws.com ACCESS_KEY SECRET_KEY
-  mc mirror source/thanos backup/thanos-backup
-"
+# Backup Garage bucket (example with rclone)
+rclone sync garage:thanos backup:thanos-backup
 ```
 
 **2. Prometheus Local Data (Optional)**
-- Only 7 days of data, already backed up to MinIO
-- Can be recreated from MinIO if needed
+- Only 7 days of data, already backed up to Garage
+- Can be recreated from Garage if needed
 
 ```bash
 # Backup local Prometheus data (optional)
@@ -374,8 +370,8 @@ kubectl get all,cm,secret,pvc,pv,ingress -n observability -o yaml > observabilit
 ### Restore
 
 ```bash
-# Restore MinIO data
-mc mirror backup/thanos-backup source/thanos
+# Restore Garage data
+rclone sync backup:thanos-backup garage:thanos
 
 # Restore Prometheus (optional)
 rsync -av /backup/prometheus/ /mnt/k8s-pvc/prometheus/
@@ -398,21 +394,22 @@ kubectl describe pod -n observability -l app=prometheus
 # 3. Permission denied - check ownership (65534:65534)
 ```
 
-### Thanos Sidecar Not Uploading to MinIO
+### Thanos Sidecar Not Uploading to Garage
 
 ```bash
 # Check sidecar logs
 kubectl logs -n observability deployment/prometheus -c thanos-sidecar
 
 # Common issues:
-# 1. MinIO credentials wrong - check thanos/minio-secret.yaml
-# 2. Bucket doesn't exist - run thanos/setup-minio-bucket.sh
-# 3. Network issue - check MinIO service accessibility
+# 1. Garage credentials wrong - check prometheus/garage-secret.yaml
+# 2. Bucket doesn't exist - create it with: garage bucket create thanos
+# 3. Network issue - check Garage service accessibility
 
-# Test MinIO connection
-kubectl run -n observability test-minio --image=minio/mc --rm -i --command -- sh -c "
-  mc alias set myminio http://minio.minio.svc.cluster.local:9000 admin changeme123
-  mc ls myminio/thanos
+# Test Garage connection
+kubectl run -n observability test-garage --image=amazon/aws-cli --rm -i --command -- sh -c "
+  export AWS_ACCESS_KEY_ID=<your-key>
+  export AWS_SECRET_ACCESS_KEY=<your-secret>
+  aws --endpoint-url http://garage.garage.svc.cluster.local:3900 s3 ls s3://thanos
 "
 ```
 
@@ -422,8 +419,8 @@ kubectl run -n observability test-minio --image=minio/mc --rm -i --command -- sh
 # Check Store Gateway
 kubectl logs -n observability deployment/thanos-store-gateway
 
-# Verify data in MinIO
-# Check http://thanos.home/stores - should show Store Gateway
+# Verify data in Garage
+# Check http://localhost:9090/stores - should show Store Gateway
 
 # Check if blocks are uploaded
 # Wait at least 2 hours after installation for first upload
@@ -540,16 +537,16 @@ Import these dashboards from grafana.com:
 
 Grafana will automatically query Thanos, which provides:
 - Fast queries for recent data (from Prometheus)
-- Seamless access to historical data (from MinIO)
+- Seamless access to historical data (from Garage)
 - Automatic downsampling for long time ranges
 
 ## Security Best Practices
 
-1. **Change MinIO credentials** in `thanos/minio-secret.yaml`
+1. **Change Garage credentials** in `prometheus/garage-secret.yaml`
 2. **Use NetworkPolicies** to restrict access to Prometheus/Thanos
 3. **Enable TLS** for ingress (cert-manager + Let's Encrypt)
 4. **Limit RBAC** to minimum required permissions
-5. **Encrypt** MinIO bucket (server-side encryption)
+5. **Encrypt** Garage bucket (server-side encryption)
 6. **Regular updates** of Prometheus and Thanos versions
 
 ## Uninstallation
@@ -560,7 +557,7 @@ Grafana will automatically query Thanos, which provides:
 
 **Note:** This removes components from Kubernetes but does NOT delete:
 - Data at `/mnt/k8s-pvc/prometheus` on master node
-- Data in MinIO bucket `thanos`
+- Data in Garage bucket `thanos`
 
 To fully clean up:
 
@@ -568,11 +565,8 @@ To fully clean up:
 # Remove local data
 sudo rm -rf /mnt/k8s-pvc/prometheus
 
-# Remove MinIO bucket
-kubectl run -n minio mc-cleanup --image=minio/mc --rm -i --command -- sh -c "
-  mc alias set myminio http://minio.minio:9000 admin changeme123
-  mc rb --force myminio/thanos
-"
+# Remove Garage bucket
+garage bucket delete --yes thanos
 ```
 
 ## Cost Analysis
@@ -585,13 +579,13 @@ For a small cluster (10 pods, 100 metrics/pod, 15s scrape interval):
 - ~5GB for 7 days
 - Well within 20Gi limit
 
-**MinIO (long-term)**:
+**Garage (long-term)**:
 - Raw (30 days): ~20GB
 - 5m downsampled (90 days): ~6GB
 - 1h downsampled (365 days): ~2GB
 - **Total**: ~28GB for 1 year
 
-Your MinIO has 860GB available, enough for many years of metrics!
+Your Garage storage has plenty of space available for many years of metrics!
 
 ## Resources
 
@@ -599,19 +593,19 @@ Your MinIO has 860GB available, enough for many years of metrics!
 - [Thanos Documentation](https://thanos.io/tip/thanos/getting-started.md/)
 - [PromQL Basics](https://prometheus.io/docs/prometheus/latest/querying/basics/)
 - [Thanos Architecture](https://thanos.io/tip/thanos/design.md/)
-- [MinIO S3 Gateway](https://min.io/docs/minio/linux/integrations/thanos.html)
+- [Garage Documentation](https://garagehq.deuxfleurs.fr/)
 
 ## Version Information
 
 - **Prometheus**: v2.54.1
 - **Thanos**: v0.36.1
 - **Local Storage**: 20Gi SSD at /mnt/k8s-pvc/prometheus (7 days)
-- **Object Storage**: MinIO bucket 'thanos' (1 year+)
+- **Object Storage**: Garage bucket 'thanos' (1 year+)
 - **Access**: Internal service endpoints + port-forward for debugging
 
 ## Next Steps
 
-1. ✅ Prometheus + Thanos installed with MinIO storage
+1. ✅ Prometheus + Thanos installed with Garage storage
 2. ⬜ **Install Grafana** for visualization (recommended next step)
 3. ⬜ Configure Grafana to use Thanos Query as data source
 4. ⬜ Import recommended Grafana dashboards

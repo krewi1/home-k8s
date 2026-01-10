@@ -10,7 +10,7 @@
 # Prerequisites:
 #   - K3s cluster running
 #   - kubectl configured
-#   - MinIO installed and running
+#   - Garage installed and running
 #   - Master node with /mnt/k8s-pvc mounted
 #####################################################################
 
@@ -67,20 +67,20 @@ check_kubectl() {
     print_success "kubectl configured and cluster accessible"
 }
 
-check_minio() {
-    print_step "Checking MinIO availability..."
+check_garage() {
+    print_step "Checking Garage availability..."
 
-    if ! kubectl get namespace minio &> /dev/null; then
-        print_error "MinIO namespace not found. Please install MinIO first."
+    if ! kubectl get namespace garage &> /dev/null; then
+        print_error "Garage namespace not found. Please install Garage first."
         exit 1
     fi
 
-    if ! kubectl get pod -n minio -l app=minio | grep -q Running; then
-        print_error "MinIO is not running. Please ensure MinIO is installed and running."
+    if ! kubectl get pod -n garage -l app=garage | grep -q Running; then
+        print_error "Garage is not running. Please ensure Garage is installed and running."
         exit 1
     fi
 
-    print_success "MinIO is available"
+    print_success "Garage is available"
 }
 
 check_existing_installation() {
@@ -125,22 +125,31 @@ setup_storage() {
     fi
 }
 
-setup_minio_bucket() {
-    print_step "Setting up MinIO bucket for Thanos..."
+setup_garage_bucket() {
+    print_step "Setting up Garage bucket for Thanos..."
 
-    print_info "Checking if Thanos bucket exists..."
+    print_warning "Please create the bucket and key in Garage manually:"
+    echo ""
+    echo "  # Create a key for Thanos"
+    echo "  garage key new --name thanos-key"
+    echo ""
+    echo "  # Create the bucket"
+    echo "  garage bucket create thanos"
+    echo ""
+    echo "  # Allow the key to access the bucket"
+    echo "  garage bucket allow --read --write thanos --key thanos-key"
+    echo ""
+    echo "  # Get the credentials"
+    echo "  garage key info thanos-key"
+    echo ""
+    print_warning "Update garage-secret.yaml with the access_key and secret_key from above"
+    echo ""
 
-    # Run mc client to create bucket
-    kubectl run -n minio mc-thanos-check \
-        --image=minio/mc:latest \
-        --restart=Never \
-        --rm \
-        -i \
-        --command -- sh -c "
-        mc alias set myminio http://minio.minio.svc.cluster.local:9000 admin changeMe123! && \
-        mc mb myminio/thanos --ignore-existing && \
-        echo 'Thanos bucket ready'
-    " 2>&1 | grep -q "ready" && print_success "Thanos bucket created/verified" || print_warning "Could not verify bucket creation"
+    read -p "Have you created the bucket and updated the secret? (y/N): " confirm
+    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+        print_info "Installation cancelled. Please set up Garage first."
+        exit 0
+    fi
 }
 
 install_stack() {
@@ -159,7 +168,7 @@ install_stack() {
     kubectl apply -f pv-pvc.yaml
 
     print_info "Creating Thanos object storage secret..."
-    kubectl apply -f minio-secret.yaml
+    kubectl apply -f garage-secret.yaml
 
     print_info "Deploying Prometheus with Thanos sidecar..."
     kubectl apply -f deployment.yaml
@@ -232,7 +241,7 @@ display_installation_info() {
     echo ""
     echo "Storage:"
     echo "  - Recent Data (7 days):  /mnt/k8s-pvc/prometheus (20Gi SSD)"
-    echo "  - Long-term Data (1yr+): MinIO bucket 'thanos'"
+    echo "  - Long-term Data (1yr+): Garage bucket 'thanos'"
     echo ""
     echo "Data Retention:"
     echo "  - Raw metrics:        30 days"
@@ -251,7 +260,7 @@ display_installation_info() {
     echo "     Type: Prometheus"
     echo "     URL: http://thanos-query.observability.svc.cluster.local:9090"
     echo "  3. Import recommended dashboards (see ../README.md)"
-    echo "  4. Wait 2+ hours for first data blocks to upload to MinIO"
+    echo "  4. Wait 2+ hours for first data blocks to upload to Garage"
     echo ""
     echo "Annotations for auto-discovery:"
     echo "  Add these annotations to your pods/services:"
@@ -281,10 +290,10 @@ main() {
 
     # Check prerequisites
     check_kubectl
-#    check_minio
+    check_garage
     check_existing_installation
-#    setup_storage
-#    setup_minio_bucket
+    setup_storage
+    setup_garage_bucket
 
     # Install everything
     install_stack

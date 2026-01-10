@@ -4,16 +4,16 @@ This directory contains infrastructure components and configurations for the hom
 
 ## Components
 
-### MinIO Object Storage
+### Garage Object Storage
 
-S3-compatible object storage for application data and backups.
+Lightweight S3-compatible object storage for application data and backups.
 
-- **Directory**: `minio/`
+- **Directory**: `garage/`
 - **Purpose**: Object storage for applications, backups, and data lakes
 - **Storage**: ~800GB SSD on master node (expandable to distributed mode)
-- **Access**: `minio.home` (console), `minio-api.home` (API)
-- **Documentation**: See [minio/README.md](minio/README.md)
-- **Quick Install**: `cd minio && ./install.sh`
+- **Access**: `garage.home` (web UI), `garage-api.home` (S3 API)
+- **Documentation**: See [garage/README.md](garage/README.md)
+- **Quick Install**: `cd garage && ./install.sh`
 
 ### nginx-ingress Controller
 
@@ -41,9 +41,9 @@ Serverless platform with Kourier ingress controller for deploying and managing c
 
 For a fresh cluster, install components in this order:
 
-1. **MinIO** - Object storage (uses SSD on master node)
+1. **Garage** - Object storage (uses SSD on master node)
    ```bash
-   cd minio
+   cd garage
    ./install.sh
    ```
 
@@ -64,7 +64,7 @@ For a fresh cluster, install components in this order:
 ```
 cluster-infra/
 ├── README.md                    # This file
-├── minio/                       # MinIO object storage
+├── garage/                      # Garage object storage
 │   ├── README.md                # Documentation
 │   ├── install.sh               # Installation script
 │   ├── uninstall.sh             # Uninstallation script
@@ -105,12 +105,12 @@ cluster-infra/
 - **Master Node**: Raspberry Pi 5 (with 1TB SSD)
   - 40GB: etcd storage
   - 100GB: PersistentVolumeClaims
-  - ~800GB: MinIO object storage
+  - ~800GB: Garage object storage
 - **Worker Nodes**: Raspberry Pi 4/5 (expandable with SSDs)
 - **Ingress Controllers**:
   - **Kourier** (port 30080): Knative services on `*.kn.home`
   - **nginx-ingress** (port 38080): Standard services on `*.home`
-- **Object Storage**: MinIO (standalone, expandable to distributed)
+- **Object Storage**: Garage (standalone, expandable to distributed)
 - **Load Balancing**: NodePort services across all cluster nodes
 
 ## Domain Configuration
@@ -119,8 +119,8 @@ Traffic routing is handled by nginx reverse proxy (on separate Pi 4 at 192.168.0
 
 - `*.kn.home` → Kourier → Knative Services (serverless)
 - `*.home` → nginx-ingress → Standard Kubernetes Services
-- `minio.home` → nginx-ingress → MinIO Console
-- `minio-api.home` → nginx-ingress → MinIO API
+- `garage.home` → nginx-ingress → Garage Web UI
+- `garage-api.home` → nginx-ingress → Garage S3 API
 
 See `../k8s-infrastructure/nginx-config/` for reverse proxy configuration.
 - **Storage**: Local path provisioner (K3s default)

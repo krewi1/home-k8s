@@ -10,7 +10,7 @@ metadata:
 spec:
   storageClassName: local-storage
   capacity:
-    storage: 20Gi  # Reduced - only 7 days local, rest in MinIO via Thanos
+    storage: 20Gi  # Reduced - only 7 days local, rest in Garage via Thanos
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
@@ -40,7 +40,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 20Gi  # Reduced - only 7 days local, rest in MinIO via Thanos
+      storage: 20Gi  # Reduced - only 7 days local, rest in Garage via Thanos
   selector:
     matchLabels:
       app: prometheus
