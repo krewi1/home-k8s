@@ -2,7 +2,7 @@
 
 Complete observability solution for the Kubernetes cluster:
 - **Metrics:** Prometheus + Thanos
-- **Logs:** Loki
+- **Logs:** Loki + Alloy
 - **Visualization:** Grafana (to be installed)
 
 All components use Garage for long-term storage.
@@ -16,10 +16,13 @@ All components use Garage for long-term storage.
 **Long-term Storage:** Garage bucket `thanos` (1 year+)
 **Access:** Grafana for visualization, port-forward for debugging
 
-### Logs (Loki)
-**Components:** Loki (Helm chart - SingleBinary mode)
+### Logs (Loki + Alloy)
+**Components:**
+- Loki (Helm chart - SingleBinary mode) - Log storage and queries
+- Alloy (Helm chart - DaemonSet) - Log collection from all pods
+
 **Namespace:** observability
-**Deployment:** Helm chart (grafana/loki)
+**Deployment:** Helm charts (grafana/loki, grafana/alloy)
 **Retention:** 7 days total
 **Storage:** Garage bucket `loki` (S3-compatible)
 **Local Cache:** 20Gi
@@ -57,6 +60,28 @@ Query Flow:
          └─ Thanos Store Gateway (older data) → reads from Garage
               ↓
          Unified Results
+
+Logs Collection & Storage Flow:
+
+Kubernetes Pods (all namespaces)
+    ↓ (stdout/stderr → /var/log/pods/)
+Alloy DaemonSet (one per node)
+    ├─ Auto-discovers pods
+    ├─ Tails log files
+    ├─ Adds labels (namespace, pod, container, etc.)
+    └─ Pushes to Loki
+         ↓
+    Loki Gateway
+    (receives and routes logs)
+         ↓
+    Loki SingleBinary
+    (stores 7 days, chunks to Garage)
+         ↓
+    Garage (loki bucket)
+    (long-term log storage)
+         ↓
+    Grafana
+    (query and visualize logs)
 ```
 
 ## Why Thanos?
@@ -616,6 +641,7 @@ Your Garage storage has plenty of space available for many years of metrics!
 - **Prometheus**: v2.54.1
 - **Thanos**: v0.36.1
 - **Loki**: Latest (via Grafana Helm chart)
+- **Alloy**: Latest (via Grafana Helm chart, DaemonSet mode)
 - **Local Storage**:
   - Prometheus: 20Gi SSD at /mnt/k8s-pvc/prometheus (7 days)
   - Loki: 20Gi local cache
@@ -628,13 +654,14 @@ Your Garage storage has plenty of space available for many years of metrics!
 
 1. ✅ Prometheus + Thanos installed with Garage storage
 2. ✅ Loki installed via Helm with Garage storage
-3. ⬜ **Install Grafana** for visualization (recommended next step)
-4. ⬜ Configure Grafana data sources:
+3. ✅ Alloy installed for log collection
+4. ⬜ **Install Grafana** for visualization (recommended next step)
+5. ⬜ Configure Grafana data sources:
    - Thanos Query for metrics: `http://thanos-query.observability.svc.cluster.local:9090`
    - Loki for logs: `http://loki-gateway.observability.svc.cluster.local:80`
-5. ⬜ Import recommended Grafana dashboards
-6. ⬜ Install log collector (Grafana Alloy/Promtail) for Loki
-7. ⬜ Set up Alertmanager for alerts
-8. ⬜ Add custom scrape configs for your applications
-9. ⬜ Configure alert rules
-10. ⬜ Add node-exporter for detailed node metrics
+6. ⬜ Import recommended Grafana dashboards
+7. ⬜ Verify logs are flowing from Alloy to Loki to Grafana
+8. ⬜ Set up Alertmanager for alerts
+9. ⬜ Add custom scrape configs for your applications
+10. ⬜ Configure alert rules
+11. ⬜ Add node-exporter for detailed node metrics

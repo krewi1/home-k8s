@@ -7,6 +7,9 @@
 deploymentMode: SingleBinary
 
 loki:
+  # Disable multi-tenancy (no org ID required)
+  auth_enabled: false
+
   # Common configuration
   commonConfig:
     replication_factor: 1

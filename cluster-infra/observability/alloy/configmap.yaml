@@ -1,0 +1,140 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-config
+  namespace: observability
+data:
+  config.alloy: |
+    // Grafana Alloy Configuration for Kubernetes Pod Log Collection
+    // This configuration collects logs from all pods and sends them to Loki
+
+    // Discover all pods in the cluster
+    discovery.kubernetes "pods" {
+      role = "pod"
+      // Restrict to pods on this node to reduce CPU & memory usage
+      selectors {
+        role = "pod"
+        field = "spec.nodeName=" + coalesce(sys.env("HOSTNAME"), constants.hostname)
+      }
+    }
+
+    // Relabel discovered pods to create useful log labels
+    discovery.relabel "pod_logs" {
+      targets = discovery.kubernetes.pods.targets
+
+      // Add namespace label
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        action = "replace"
+        target_label = "namespace"
+      }
+
+      // Add pod label
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        action = "replace"
+        target_label = "pod"
+      }
+
+      // Add container label
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_name"]
+        action = "replace"
+        target_label = "container"
+      }
+
+      // Add app label
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+        action = "replace"
+        target_label = "app"
+      }
+
+      // Add job label (namespace/container format)
+      rule {
+        source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_container_name"]
+        action = "replace"
+        target_label = "job"
+        separator = "/"
+      }
+
+      // Set the log file path
+      rule {
+        source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+        action = "replace"
+        target_label = "__path__"
+        separator = "/"
+        replacement = "/var/log/pods/*$1/*.log"
+      }
+
+      // Detect container runtime
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_id"]
+        action = "replace"
+        target_label = "tmp_container_runtime"
+        regex = "^(\\w+):\\/\\/.+$"
+        replacement = "$1"
+      }
+    }
+
+    // Tail logs from Kubernetes containers
+    loki.source.kubernetes "pod_logs" {
+      targets    = discovery.relabel.pod_logs.output
+      forward_to = [loki.process.pod_logs.receiver]
+    }
+
+    // Process logs based on container runtime
+    loki.process "pod_logs" {
+      // Process containerd logs
+      stage.match {
+        selector = "{tmp_container_runtime=\"containerd\"}"
+
+        // Parse CRI format logs
+        stage.cri {}
+
+        // Add parsed fields as labels
+        stage.labels {
+          values = {
+            flags  = "",
+            stream = "",
+          }
+        }
+      }
+
+      // Process docker logs
+      stage.match {
+        selector = "{tmp_container_runtime=\"docker\"}"
+
+        // Parse Docker format logs
+        stage.docker {}
+
+        // Add stream label
+        stage.labels {
+          values = {
+            stream = "",
+          }
+        }
+      }
+
+      // Drop temporary runtime label
+      stage.label_drop {
+        values = ["tmp_container_runtime"]
+      }
+
+      // Add cluster label
+      stage.static_labels {
+        values = {
+          cluster = "home-k8s",
+        }
+      }
+
+      forward_to = [loki.write.loki.receiver]
+    }
+
+    // Write logs to Loki
+    loki.write "loki" {
+      endpoint {
+        url = "http://loki-gateway.observability.svc.cluster.local:80/loki/api/v1/push"
+      }
+    }

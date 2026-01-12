@@ -1,0 +1,51 @@
+---
+# Grafana Alloy Helm Chart Values
+# DaemonSet deployment for log collection from Kubernetes pods
+
+# Deploy as DaemonSet to collect logs from all nodes
+alloy:
+  configMap:
+    create: false  # We'll create our own ConfigMap with config.alloy
+
+  clustering:
+    enabled: false  # Not needed for log collection
+
+  controller:
+    type: 'daemonset'
+
+  mounts:
+    # Mount /var/log from the host to read pod logs
+    varlog: true
+    # Mount /var/lib/docker/containers for docker runtime
+    dockercontainers: false
+
+  # Resource limits for Raspberry Pi nodes
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Security context
+  securityContext:
+    privileged: false
+    runAsUser: 0  # Required to read /var/log
+    runAsGroup: 0
+
+# Service configuration
+service:
+  enabled: true
+  type: ClusterIP
+
+# Service monitor for Prometheus metrics (optional)
+serviceMonitor:
+  enabled: false
+
+# Extra environment variables
+extraEnv:
+  - name: HOSTNAME
+    valueFrom:
+      fieldRef:
+        fieldPath: spec.nodeName
