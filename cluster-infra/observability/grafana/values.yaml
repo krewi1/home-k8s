@@ -1,0 +1,141 @@
+---
+# Grafana Helm Chart Values
+# Configured with Loki and Thanos Query (Prometheus) datasources
+
+# Persistence for dashboards and data
+persistence:
+  enabled: true
+  storageClassName: local-path  # K3s default
+  size: 5Gi
+
+# Security context - fix permissions for persistent volume
+securityContext:
+  runAsUser: 472
+  runAsGroup: 472
+  fsGroup: 472
+  runAsNonRoot: true
+
+# Init container to fix permissions
+initChownData:
+  enabled: false
+
+# Admin credentials
+adminUser: admin
+adminPassword: "admin"  # Change this in production!
+
+# Datasources configuration
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      # Thanos Query (Prometheus) - Default datasource for metrics
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        url: http://thanos-query.observability.svc.cluster.local:9090
+        access: proxy
+        isDefault: true
+        jsonData:
+          timeInterval: 15s
+          queryTimeout: 60s
+          httpMethod: POST
+        editable: true
+
+      # Loki - Datasource for logs
+      - name: Loki
+        type: loki
+        uid: loki
+        url: http://loki-gateway.observability.svc.cluster.local:80
+        access: proxy
+        jsonData:
+          maxLines: 1000
+        editable: true
+
+# Dashboard providers
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+
+# Pre-install some useful dashboards from grafana.com
+dashboards:
+  default:
+    # Kubernetes Cluster Monitoring
+    kubernetes-cluster:
+      gnetId: 315
+      revision: 3
+      datasource: Prometheus
+
+    # Kubernetes Pods
+    kubernetes-pods:
+      gnetId: 6417
+      revision: 1
+      datasource: Prometheus
+
+    # Node Exporter Full
+    node-exporter:
+      gnetId: 1860
+      revision: 31
+      datasource: Prometheus
+
+    # Loki Dashboard
+    loki-logs:
+      gnetId: 13639
+      revision: 2
+      datasource: Loki
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+
+# Ingress configuration for grafana.home
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hosts:
+    - grafana.home
+  path: /
+  pathType: Prefix
+
+# Resource limits for Raspberry Pi
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+# Environment variables
+env:
+  # Allow anonymous viewing
+  GF_AUTH_ANONYMOUS_ENABLED: "false"
+  GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+  # Server settings
+  GF_SERVER_ROOT_URL: "http://grafana.home"
+  # Enable explore by default
+  GF_EXPLORE_ENABLED: "true"
+
+# Plugins to install
+plugins:
+  - grafana-piechart-panel
+
+# Single replica for home setup
+replicas: 1
+
+# Disable SMTP (not needed for home setup)
+smtp:
+  enabled: false
+
+# Image pull policy
+imageRenderer:
+  enabled: false

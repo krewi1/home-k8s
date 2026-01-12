@@ -3,7 +3,7 @@
 Complete observability solution for the Kubernetes cluster:
 - **Metrics:** Prometheus + Thanos
 - **Logs:** Loki + Alloy
-- **Visualization:** Grafana (to be installed)
+- **Visualization:** Grafana
 
 All components use Garage for long-term storage.
 
@@ -27,6 +27,23 @@ All components use Garage for long-term storage.
 **Storage:** Garage bucket `loki` (S3-compatible)
 **Local Cache:** 20Gi
 **Access:** Grafana for visualization, port-forward for debugging
+
+### Visualization (Grafana)
+**Components:** Grafana (Helm chart)
+**Namespace:** observability
+**Deployment:** Helm chart (grafana/grafana)
+**Datasources:**
+- Prometheus (via Thanos Query)
+- Loki (logs)
+
+**Pre-installed Dashboards:**
+- Kubernetes Cluster Monitoring
+- Kubernetes Pods
+- Node Exporter Full
+- Loki Logs Dashboard
+
+**Storage:** 5Gi persistent volume
+**Access:** http://grafana.home (via nginx ingress)
 
 ## Architecture
 
@@ -642,26 +659,31 @@ Your Garage storage has plenty of space available for many years of metrics!
 - **Thanos**: v0.36.1
 - **Loki**: Latest (via Grafana Helm chart)
 - **Alloy**: Latest (via Grafana Helm chart, DaemonSet mode)
+- **Grafana**: Latest (via Grafana Helm chart)
 - **Local Storage**:
   - Prometheus: 20Gi SSD at /mnt/k8s-pvc/prometheus (7 days)
   - Loki: 20Gi local cache
+  - Grafana: 5Gi persistent volume
 - **Object Storage**:
   - Thanos: Garage bucket 'thanos' (1 year+)
   - Loki: Garage bucket 'loki' (7 days)
-- **Access**: Internal service endpoints + port-forward for debugging
+- **Access**:
+  - Grafana: http://grafana.home (nginx ingress)
+  - Internal service endpoints for inter-component communication
 
 ## Next Steps
 
 1. ✅ Prometheus + Thanos installed with Garage storage
 2. ✅ Loki installed via Helm with Garage storage
 3. ✅ Alloy installed for log collection
-4. ⬜ **Install Grafana** for visualization (recommended next step)
-5. ⬜ Configure Grafana data sources:
-   - Thanos Query for metrics: `http://thanos-query.observability.svc.cluster.local:9090`
-   - Loki for logs: `http://loki-gateway.observability.svc.cluster.local:80`
-6. ⬜ Import recommended Grafana dashboards
-7. ⬜ Verify logs are flowing from Alloy to Loki to Grafana
-8. ⬜ Set up Alertmanager for alerts
-9. ⬜ Add custom scrape configs for your applications
-10. ⬜ Configure alert rules
-11. ⬜ Add node-exporter for detailed node metrics
+4. ✅ Grafana installed with pre-configured datasources and dashboards
+5. ⬜ **Verify complete observability stack:**
+   - Access Grafana: http://grafana.home (add to /etc/hosts first)
+   - Test Prometheus datasource (Explore → Prometheus → Query: `up`)
+   - Test Loki datasource (Explore → Loki → Query: `{namespace="default"}`)
+   - Browse pre-installed dashboards
+6. ⬜ Set up Alertmanager for alerts
+7. ⬜ Configure alert rules for your workloads
+8. ⬜ Add custom scrape configs for your applications
+9. ⬜ Add node-exporter for detailed node metrics
+10. ⬜ Create custom dashboards for your applications
