@@ -1,0 +1,126 @@
+---
+# Loki Helm Chart Values
+# Deployment with Garage S3 storage backend
+# Retention: 7 days local + long-term in Garage
+
+# Deployment mode: SingleBinary (monolithic) for simplicity
+deploymentMode: SingleBinary
+
+loki:
+  # Common configuration
+  commonConfig:
+    replication_factor: 1
+
+  # Schema configuration
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: s3
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+
+  # Pattern ingester for structured metadata
+  pattern_ingester:
+    enabled: true
+
+  # Limits and retention
+  limits_config:
+    allow_structured_metadata: true
+    volume_enabled: true
+    retention_period: 168h  # 7 days retention
+
+  # Compactor for cleanup
+  compactor:
+    retention_enabled: true
+    delete_request_store: s3
+
+  # Storage configuration
+  storage:
+    type: s3
+    bucketNames:
+      chunks: loki
+      ruler: loki
+      admin: loki
+    s3:
+      # Garage S3-compatible endpoint
+      endpoint: garage.garage.svc.cluster.local:3900
+      # Garage region (can be any value)
+      region: garage
+      # Credentials - REPLACE THESE with your Garage key credentials
+      accessKeyId: replace-me
+      secretAccessKey: replace-me
+      # S3 configuration for Garage compatibility
+      s3ForcePathStyle: true
+      insecure: true  # Set to false if using TLS
+      http_config: {}
+
+# SingleBinary configuration
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    storageClass: local-path  # Use local-path for K3s
+    size: 20Gi  # Local SSD storage for 7 days of logs
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+
+# Disable SimpleScalable components (we're using SingleBinary mode)
+# Zero out replica counts of other deployment modes
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+
+ingester:
+  replicas: 0
+querier:
+  replicas: 0
+queryFrontend:
+  replicas: 0
+queryScheduler:
+  replicas: 0
+distributor:
+  replicas: 0
+compactor:
+  replicas: 0
+indexGateway:
+  replicas: 0
+bloomCompactor:
+  replicas: 0
+bloomGateway:
+  replicas: 0
+
+# Disable built-in MinIO (using external Garage instead)
+minio:
+  enabled: false
+
+# Gateway configuration
+gateway:
+  replicas: 1
+  enabled: true
+  service:
+    type: ClusterIP
+    port: 80
+
+# Monitoring
+monitoring:
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
+  lokiCanary:
+    enabled: false
+
+# Test configuration
+test:
+  enabled: false

@@ -1,13 +1,28 @@
 # Observability Stack
 
-Monitoring and metrics collection for the Kubernetes cluster using **Prometheus + Thanos** with long-term storage in Garage.
+Complete observability solution for the Kubernetes cluster:
+- **Metrics:** Prometheus + Thanos
+- **Logs:** Loki
+- **Visualization:** Grafana (to be installed)
+
+All components use Garage for long-term storage.
 
 ## Current Setup
 
+### Metrics (Prometheus + Thanos)
 **Components:** Prometheus + Thanos (Sidecar, Query, Store Gateway, Compactor)
 **Namespace:** observability
 **Short-term Storage:** `/mnt/k8s-pvc/prometheus` (20Gi SSD - 7 days)
-**Long-term Storage:** Garage bucket `thanos` (unlimited - 1 year+)
+**Long-term Storage:** Garage bucket `thanos` (1 year+)
+**Access:** Grafana for visualization, port-forward for debugging
+
+### Logs (Loki)
+**Components:** Loki (Helm chart - SingleBinary mode)
+**Namespace:** observability
+**Deployment:** Helm chart (grafana/loki)
+**Retention:** 7 days total
+**Storage:** Garage bucket `loki` (S3-compatible)
+**Local Cache:** 20Gi
 **Access:** Grafana for visualization, port-forward for debugging
 
 ## Architecture
@@ -62,9 +77,10 @@ Query Flow:
 
 1. **Kubernetes cluster** running (K3s)
 2. **kubectl** configured
-3. **nginx-ingress** controller installed
-4. **Garage** installed and running
-5. **Master node** with `/mnt/k8s-pvc` mounted (100GB SSD partition)
+3. **helm 3** installed
+4. **nginx-ingress** controller installed
+5. **Garage** installed and running
+6. **Master node** with `/mnt/k8s-pvc` mounted (100GB SSD partition)
 
 ### Deploy Prometheus + Thanos
 
@@ -599,17 +615,26 @@ Your Garage storage has plenty of space available for many years of metrics!
 
 - **Prometheus**: v2.54.1
 - **Thanos**: v0.36.1
-- **Local Storage**: 20Gi SSD at /mnt/k8s-pvc/prometheus (7 days)
-- **Object Storage**: Garage bucket 'thanos' (1 year+)
+- **Loki**: Latest (via Grafana Helm chart)
+- **Local Storage**:
+  - Prometheus: 20Gi SSD at /mnt/k8s-pvc/prometheus (7 days)
+  - Loki: 20Gi local cache
+- **Object Storage**:
+  - Thanos: Garage bucket 'thanos' (1 year+)
+  - Loki: Garage bucket 'loki' (7 days)
 - **Access**: Internal service endpoints + port-forward for debugging
 
 ## Next Steps
 
 1. ✅ Prometheus + Thanos installed with Garage storage
-2. ⬜ **Install Grafana** for visualization (recommended next step)
-3. ⬜ Configure Grafana to use Thanos Query as data source
-4. ⬜ Import recommended Grafana dashboards
-5. ⬜ Set up Alertmanager for alerts
-6. ⬜ Add custom scrape configs for your applications
-7. ⬜ Configure alert rules
-8. ⬜ Add node-exporter for detailed node metrics
+2. ✅ Loki installed via Helm with Garage storage
+3. ⬜ **Install Grafana** for visualization (recommended next step)
+4. ⬜ Configure Grafana data sources:
+   - Thanos Query for metrics: `http://thanos-query.observability.svc.cluster.local:9090`
+   - Loki for logs: `http://loki-gateway.observability.svc.cluster.local:80`
+5. ⬜ Import recommended Grafana dashboards
+6. ⬜ Install log collector (Grafana Alloy/Promtail) for Loki
+7. ⬜ Set up Alertmanager for alerts
+8. ⬜ Add custom scrape configs for your applications
+9. ⬜ Configure alert rules
+10. ⬜ Add node-exporter for detailed node metrics
