@@ -127,6 +127,11 @@ data:
           target_label: __metrics_path__
           replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
 
+      # kube-state-metrics
+      - job_name: 'kube-state-metrics'
+        static_configs:
+          - targets: ['kube-state-metrics.observability.svc.cluster.local:8080']
+
       # Service endpoints
       - job_name: 'kubernetes-service-endpoints'
         kubernetes_sd_configs:

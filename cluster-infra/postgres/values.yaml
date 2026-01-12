@@ -1,0 +1,95 @@
+---
+# PostgreSQL Helm Chart Values (Bitnami)
+# Single instance setup for home Kubernetes cluster
+
+# Database configuration
+auth:
+  # Superuser (always named "postgres" - not configurable)
+  enablePostgresUser: true
+  postgresPassword: "change-this"  # Change this!
+  # Default database to create
+  database: "default"
+  # Default user (non-superuser)
+  username: "appuser"
+  password: "appuser"
+
+# Architecture: standalone (single instance) or replication
+architecture: standalone
+
+# Primary instance configuration
+primary:
+  # Persistence - use existing PVC (created via pv-pvc.yaml)
+  persistence:
+    enabled: true
+    existingClaim: postgresql-data-pvc
+
+  # Pin to master node where SSD is mounted
+  nodeSelector:
+    kubernetes.io/hostname: master-01
+
+  # Resource limits for Raspberry Pi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  # PostgreSQL configuration
+  configuration: |
+    # Memory settings (conservative for Pi)
+    shared_buffers = 128MB
+    effective_cache_size = 384MB
+    work_mem = 4MB
+    maintenance_work_mem = 64MB
+
+    # Connection settings
+    max_connections = 100
+
+    # WAL settings
+    wal_buffers = 4MB
+    min_wal_size = 80MB
+    max_wal_size = 1GB
+
+    # Query planning
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+
+  # Pod security context
+  podSecurityContext:
+    enabled: true
+    fsGroup: 1001
+
+  # Container security context
+  containerSecurityContext:
+    enabled: true
+    runAsUser: 1001
+    runAsNonRoot: true
+
+# Service configuration
+service:
+  type: ClusterIP
+  ports:
+    postgresql: 5432
+
+# Metrics for Prometheus (optional)
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: false  # Enable if you have Prometheus Operator
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# Volume permissions init container
+volumePermissions:
+  enabled: false
+
+# Network policy (disabled for simplicity)
+networkPolicy:
+  enabled: false

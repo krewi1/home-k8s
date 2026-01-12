@@ -182,6 +182,54 @@ configure_custom_domain() {
     echo "    <node-ip> <service-name>.<namespace>.kn.home"
 }
 
+configure_node_antiaffinity() {
+    print_step "Configuring anti-affinity to avoid master node..."
+
+    # Anti-affinity patch to avoid scheduling on master-01
+    local AFFINITY_PATCH='{
+      "spec": {
+        "template": {
+          "spec": {
+            "affinity": {
+              "nodeAffinity": {
+                "preferredDuringSchedulingIgnoredDuringExecution": [
+                  {
+                    "weight": 100,
+                    "preference": {
+                      "matchExpressions": [
+                        {
+                          "key": "kubernetes.io/hostname",
+                          "operator": "NotIn",
+                          "values": ["master-01"]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }'
+
+    # Patch all deployments in knative-serving namespace
+    print_info "Patching knative-serving deployments..."
+    for deploy in $(kubectl get deployments -n knative-serving -o name); do
+        kubectl patch "$deploy" -n knative-serving --type=strategic --patch "$AFFINITY_PATCH"
+        print_info "  Patched $deploy"
+    done
+
+    # Patch all deployments in kourier-system namespace
+    print_info "Patching kourier-system deployments..."
+    for deploy in $(kubectl get deployments -n kourier-system -o name); do
+        kubectl patch "$deploy" -n kourier-system --type=strategic --patch "$AFFINITY_PATCH"
+        print_info "  Patched $deploy"
+    done
+
+    print_success "Anti-affinity configured (prefer to avoid master-01)"
+}
+
 display_installation_info() {
     print_step "Installation complete!"
 
@@ -292,6 +340,9 @@ main() {
 
     # Configure custom domain (kn.home)
     configure_custom_domain
+
+    # Configure anti-affinity to avoid master node
+    configure_node_antiaffinity
 
     # Verify installation
     verify_installation
