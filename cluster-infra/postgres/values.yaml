@@ -18,6 +18,11 @@ architecture: standalone
 
 # Primary instance configuration
 primary:
+  # CRITICAL: Listen on all interfaces for K8s networking
+  extraEnvVars:
+    - name: POSTGRESQL_EXTRA_FLAGS
+      value: "-c listen_addresses=*"
+
   # Persistence - use existing PVC (created via pv-pvc.yaml)
   persistence:
     enabled: true
@@ -36,25 +41,26 @@ primary:
       cpu: 1000m
       memory: 1Gi
 
-  # PostgreSQL configuration
-  configuration: |
+  # PostgreSQL extended configuration (appended to defaults)
+  extendedConfiguration: |
     # Memory settings (conservative for Pi)
     shared_buffers = 128MB
     effective_cache_size = 384MB
     work_mem = 4MB
     maintenance_work_mem = 64MB
-
-    # Connection settings
     max_connections = 100
-
-    # WAL settings
     wal_buffers = 4MB
     min_wal_size = 80MB
     max_wal_size = 1GB
-
-    # Query planning
     random_page_cost = 1.1
     effective_io_concurrency = 200
+
+  # pg_hba.conf - client authentication (allow K8s pod networks)
+  pgHbaConfiguration: |
+    local   all   all                 trust
+    host    all   all   127.0.0.1/32  scram-sha-256
+    host    all   all   ::1/128       scram-sha-256
+    host    all   all   0.0.0.0/0     scram-sha-256
 
   # Pod security context
   podSecurityContext:

@@ -132,6 +132,20 @@ data:
         static_configs:
           - targets: ['kube-state-metrics.observability.svc.cluster.local:8080']
 
+      # Node exporter (host metrics - CPU, memory, disk, network)
+      - job_name: 'node-exporter'
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - source_labels: [__address__]
+            regex: (.+):(.+)
+            replacement: $1:9100
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: instance
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+
       # Service endpoints
       - job_name: 'kubernetes-service-endpoints'
         kubernetes_sd_configs:

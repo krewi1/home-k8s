@@ -119,20 +119,20 @@ create_namespace() {
 }
 
 setup_storage() {
-    print_step "Setting up persistent storage on master node..."
-
-    # Create data directory on master node
-    print_info "Creating data directory $DATA_DIR on $MASTER_NODE..."
-    print_info "You may need to run this manually on $MASTER_NODE if SSH is not available:"
-    echo ""
-    echo "  ssh $MASTER_NODE 'sudo mkdir -p $DATA_DIR && sudo chown 1001:1001 $DATA_DIR'"
-    echo ""
-
-    read -p "Has the directory been created? (y/N): " confirm
-    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-        print_warning "Please create the directory and run the script again"
-        exit 1
-    fi
+#    print_step "Setting up persistent storage on master node..."
+#
+#    # Create data directory on master node
+#    print_info "Creating data directory $DATA_DIR on $MASTER_NODE..."
+#    print_info "You may need to run this manually on $MASTER_NODE if SSH is not available:"
+#    echo ""
+#    echo "  ssh $MASTER_NODE 'sudo mkdir -p $DATA_DIR && sudo chown 1001:1001 $DATA_DIR'"
+#    echo ""
+#
+#    read -p "Has the directory been created? (y/N): " confirm
+#    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+#        print_warning "Please create the directory and run the script again"
+#        exit 1
+#    fi
 
     # Apply PV and PVC
     print_info "Creating PersistentVolume and PersistentVolumeClaim..."
@@ -140,7 +140,7 @@ setup_storage() {
 
     # Wait for PVC to be bound
     print_info "Waiting for PVC to be bound..."
-    kubectl wait --for=condition=Bound pvc/postgresql-data-pvc -n "$NAMESPACE" --timeout=60s
+#    kubectl wait --for=condition=Bound pvc/postgresql-data-pvc -n "$NAMESPACE" --timeout=60s
 
     print_success "Storage configured (PV/PVC bound)"
 }
@@ -287,7 +287,7 @@ main() {
     check_existing_installation
     add_helm_repo
     create_namespace
-#    setup_storage
+    setup_storage
     install_postgresql
     get_credentials
     verify_installation

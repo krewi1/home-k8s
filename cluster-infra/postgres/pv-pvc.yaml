@@ -1,4 +1,13 @@
 ---
+# StorageClass for local storage (no dynamic provisioning)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+
+---
 # PersistentVolume for PostgreSQL data (using SSD on master node)
 apiVersion: v1
 kind: PersistentVolume
